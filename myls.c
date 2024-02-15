@@ -9,6 +9,8 @@
 #include <sys/types.h>
 #include <string.h>
 
+#define PATH_MAX 4096
+
 void do_ls(char *dirname);
 void print_file_info(char *filename);
 void mode_change(int mode, char* str);
@@ -33,7 +35,7 @@ int main(int argc,char *argv[])
 {
     int Flag = 0;
     filenames = (char **)malloc(sizeof(char *) * 10000);
-    for(int i = 0;i < 50000; i++){
+    for(int i = 0;i < 10000; i++){
         filenames[i] = (char *)malloc(sizeof(char) * (PATH_MAX + 1));
     }
     filetime = (mode_t *)malloc(sizeof(mode_t) * 10000);
@@ -55,8 +57,10 @@ int main(int argc,char *argv[])
                     has_s++;
                 else if (argv[i][j] == 'R')
                     has_R++;
-                else
-                    perror("ls: 不适用的选项\n请尝试执行 \"ls --help\" 来获取更多信息。");
+                else{
+                    perror("ls: 不适用的选项 \n请尝试执行 \"ls --help\" 来获取更多信息。");
+                    return 0;
+                }
             }
         }
     }
@@ -85,6 +89,7 @@ void do_ls(char *dirname){
     int file_cnt = 0;
     int flag = 0;
     DIR *dir_ptr = NULL;
+    char pathname[256];
     struct dirent *direntp = NULL;
     struct stat info;
 
@@ -94,9 +99,11 @@ void do_ls(char *dirname){
     else{
         //记录文件信息
         while((direntp = readdir(dir_ptr)) != NULL){
-            filenames[file_cnt++] = direntp->d_name; 
-            if(stat(filenames[file_cnt - 1], &info) == -1){
-                perror(filenames[file_cnt - 1]);
+            filenames[file_cnt++] = direntp->d_name;
+            sprintf(pathname,"%s/%s",dirname,filenames[file_cnt - 1]);
+            if(stat(pathname, &info) == -1){
+                perror(pathname);
+                exit(EXIT_FAILURE);
             }
             else {
                 filetime[file_cnt - 1] = info.st_mtime;
@@ -112,8 +119,10 @@ void do_ls(char *dirname){
         for(int i = 0; i < file_cnt; i++){
             if(filenames[i][0] == '.' && has_a == 0)
                 continue;
-            if(stat(filenames[i], &info) == -1){
-                perror(filenames[i]);
+            sprintf(pathname,"%s/%s",dirname,filenames[i]);
+            if(stat(pathname, &info) == -1){
+                perror(pathname);
+                exit(EXIT_FAILURE);
             }
             else {
                 if(has_i){
@@ -123,7 +132,7 @@ void do_ls(char *dirname){
                 if(has_s){
                     long long size = info.st_size/1024;
                     if(size <= 4)
-                        printf(" 4  ");
+                        printf("%-4d",4);
                     else 
                         printf("%-4lld",size);
                 }
@@ -138,10 +147,9 @@ void do_ls(char *dirname){
                 if(has_R){
                     if(S_ISDIR(info.st_mode)){
                         if(strcmp(filenames[i],".") || strcmp(filenames[i],"..")){
-                            char path[256];
-                            sprintf(path,"%s/%s",dirname,filenames[i]);
-                            printf("%s:\n",path);
-                            do_ls(path);
+                            sprintf(pathname,"%s/%s",dirname,filenames[i]);
+                            printf("%s:\n",pathname);
+                            do_ls(pathname);
                         }
                     }
                 }
@@ -152,7 +160,7 @@ void do_ls(char *dirname){
     exit(EXIT_SUCCESS);
 }
 
-void print_file_info(char *filename){  //-l
+void print_file_info(char *filename){  
     struct stat file_stat;
     if(stat(filename, &file_stat) == -1){
         perror(filename);
