@@ -12,7 +12,7 @@
 #define PATH_MAX 4096
 
 void do_ls(char *dirname);
-void print_file_info(char *filename);
+void print_file_info(char *filename,char *pathname);
 void mode_change(int mode, char* str);
 char *uid_to_name(uid_t uid);
 char *gid_to_name(gid_t gid);
@@ -138,7 +138,7 @@ void do_ls(char *dirname){
                 }
 
                 if(has_l) {
-                    print_file_info(filenames[i]);
+                    print_file_info(filenames[i],pathname);
                 }
                 else {
                     get_color(info,filenames[i]);
@@ -146,7 +146,7 @@ void do_ls(char *dirname){
 
                 if(has_R){
                     if(S_ISDIR(info.st_mode)){
-                        if(strcmp(filenames[i],".") || strcmp(filenames[i],"..")){
+                        if(strcmp(filenames[i],".") && strcmp(filenames[i],"..")){
                             sprintf(pathname,"%s/%s",dirname,filenames[i]);
                             printf("%s:\n",pathname);
                             do_ls(pathname);
@@ -160,10 +160,10 @@ void do_ls(char *dirname){
     exit(EXIT_SUCCESS);
 }
 
-void print_file_info(char *filename){  
+void print_file_info(char *filename,char *pathname){  
     struct stat file_stat;
-    if(stat(filename, &file_stat) == -1){
-        perror(filename);
+    if(stat(pathname, &file_stat) == -1){
+        perror(pathname);
         exit(EXIT_FAILURE);
     }
     else {
