@@ -70,6 +70,7 @@ int main(int argc,char *argv[])
             Flag = 1;
             printf("%s:\n",argv[i]);
             do_ls(argv[i]);   //处理每一个目录
+            printf("\n");
         }
     }
     if(Flag == 0){
@@ -146,7 +147,7 @@ void do_ls(char *dirname){
 
                 if(has_R){
                     if(S_ISDIR(info.st_mode)){
-                        if(strcmp(filenames[i],".") && strcmp(filenames[i],"..")){
+                        if(strcmp(filenames[i],".") !=0 && strcmp(filenames[i],"..") != 0){
                             sprintf(pathname,"%s/%s",dirname,filenames[i]);
                             printf("%s:\n",pathname);
                             do_ls(pathname);
@@ -157,7 +158,6 @@ void do_ls(char *dirname){
         }
     }
     closedir(dir_ptr);
-    exit(EXIT_SUCCESS);
 }
 
 void print_file_info(char *filename,char *pathname){  
