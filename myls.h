@@ -8,6 +8,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <string.h>
+#include <getopt.h>
 
 //#define PATH_MAX 1024
 
