@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <string.h>
 #include <getopt.h>
+#include <unistd.h>
 
 //#define PATH_MAX 1024
 

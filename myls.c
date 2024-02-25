@@ -67,7 +67,7 @@ void do_ls(char *dirname){
         //拼接路径,记录文件数量
         while((direntp = readdir(dir_ptr)) != NULL){
             snprintf(filepath, sizeof(filepath), "%s/%s", dirname, direntp->d_name);
-            if(stat(filepath, &info) == -1){
+            if(lstat(filepath, &info) == -1){
                 perror(filepath);
                 exit(EXIT_FAILURE);
             }
@@ -86,7 +86,7 @@ void do_ls(char *dirname){
     while((direntp = readdir(dir_ptr)) != NULL){
         strcpy(fileinfo[j].filename, direntp->d_name);
         snprintf(filepath, sizeof(filepath), "%s/%s", dirname, direntp->d_name);
-            if(stat(filepath, &fileinfo[j].info) == -1){
+            if(lstat(filepath, &fileinfo[j].info) == -1){
                 perror(filepath);
                 exit(EXIT_FAILURE);
             }
@@ -187,12 +187,30 @@ void print_file_info(File fileinfo){
 
 void mode_change(int mode, char *str){
     strcpy(str,"----------");
-    if(S_ISDIR(mode))  
-        str[0] = 'd';  //directory
-    if(S_ISCHR(mode))  
-        str[0] = 'c';  //char device
-    if(S_ISBLK(mode))  
-        str[0] = 'b';  //block device
+    switch (mode & S_IFMT)
+    {
+    case S_IFREG:
+        str[0] = '-';
+        break;
+    case S_IFDIR:
+        str[0] = 'd';
+        break;
+    case S_IFCHR:
+        str[0] = 'c';
+        break;
+    case S_IFBLK:
+        str[0] = 'b';
+        break;
+    case S_IFIFO:
+        str[0] = 'p';
+        break;
+    case S_IFSOCK:
+        str[0] = 's';
+        break;
+    case S_IFLNK:
+        str[0] = 'l';
+        break;
+    }
 
     //user
     if(mode & S_IRUSR) 
@@ -217,6 +235,7 @@ void mode_change(int mode, char *str){
         str[8] = 'w';
     if(mode & S_IXOTH) 
         str[9] = 'x';
+    str[10] = '\0';
 }
 
 char *uid_to_name(uid_t uid){
