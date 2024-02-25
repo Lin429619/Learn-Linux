@@ -147,14 +147,18 @@ void do_ls(char *dirname){
         }
     }
 
+    rewinddir(dir_ptr);
+
     if(has_R){
-        for(int i = 0; i < File_cnt; i++){
-            if(S_ISDIR(fileinfo[i].info.st_mode)){
-                if(strcmp(fileinfo[i].filename,".") !=0 && strcmp(fileinfo[i].filename,"..") != 0){
+        while((direntp = readdir(dir_ptr)) != NULL){
+            if(has_a == 0 && direntp->d_name[0] == '.')
+                continue;
+            if(direntp->d_type == DT_DIR && strcmp(direntp->d_name, "..") != 0 && strcmp(direntp->d_name, ".") != 0){
+                char real_path[1024];
                 snprintf(filepath, sizeof(filepath), "%s/%s", dirname, direntp->d_name);
-                printf("%s:\n",filepath);
+                realpath(filepath,real_path);
+                printf("\n%s:\n",real_path);
                 do_ls(filepath);
-                }
             }
         }
     }
