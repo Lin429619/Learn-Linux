@@ -1,0 +1,1 @@
+About learning Linux system.
