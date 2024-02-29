@@ -185,27 +185,27 @@ void print_file_info(File fileinfo){
 
 void mode_change(int mode, char *str){
     strcpy(str,"----------");
-    switch (mode & S_IFMT)
+    switch (mode & __S_IFMT)
     {
-    case S_IFREG:
+    case __S_IFREG:
         str[0] = '-';
         break;
-    case S_IFDIR:
+    case __S_IFDIR:
         str[0] = 'd';
         break;
-    case S_IFCHR:
+    case __S_IFCHR:
         str[0] = 'c';
         break;
-    case S_IFBLK:
+    case __S_IFBLK:
         str[0] = 'b';
         break;
-    case S_IFIFO:
+    case __S_IFIFO:
         str[0] = 'p';
         break;
-    case S_IFSOCK:
+    case __S_IFSOCK:
         str[0] = 's';
         break;
-    case S_IFLNK:
+    case __S_IFLNK:
         str[0] = 'l';
         break;
     }
