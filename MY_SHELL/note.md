@@ -10,3 +10,18 @@
 > getpid() 返回调用进程的进程号
 
 > fork() 创建子进程，系统内核将父进程的代码和运行到的当前位置都复制给子进程，新的进程从**fork返回的位置**开始运行，并非从头开始。错误返回-1,正确返回0,并回到子进程。
+
+> wait() 父进程调用wait等待子进程结束，在子进程运行的同时父进程运行wait函数，接收到子进程调用exit的返回值之后继续运行自己的进程，wait()d的返回值是调用exitd的子进程的PID，可以告知父进程子进进程时如何结束的（成功，死亡，失败）。wait函数的参数是**用来储存子进程的退出状态**（整数变量），由三个部分组成————8位记录退出值，7位记录信号序号，1位指明发生错误并产生内核映像。
+
+```
+//查看子进程的退出状态
+main(){
+    int child_status;
+    int high_8,low_7,bit_7;
+
+    wait(&child_status);
+    high_8 = child_status >> 8; //exit value
+    low_7 = child_status & 0x7F; //signal number
+    bit_7 = child_status & 0x80; //core dump flag
+}
+```
