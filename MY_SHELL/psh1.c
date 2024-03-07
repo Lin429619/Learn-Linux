@@ -3,6 +3,8 @@
 # include<string.h>
 # include<stdlib.h>
 # include<unistd.h>
+# include<sys/types.h>
+# include<sys/wait.h>
 
 #define MAXARGS 20
 #define ARGLEN 100
@@ -32,9 +34,20 @@ int main()
 
 int execute(char *arglist[]){
 
-    execvp(arglist[0],arglist);
-    perror("execvp failed");
-    exit(1);
+    int pid,exitstatus;
+    pid = fork();
+    switch(pid){
+        case -1:
+            perror("fork failed");
+            exit(1);
+        case 0: //子进程的代码
+            execvp(arglist[0],arglist);
+            perror("execvp failed");
+            exit(1);
+        default: //父进程的代码
+            while(wait(&exitstatus) != pid) ;
+            printf("child exited with status %d,%d\n",exitstatus >> 8,exitstatus & 0377);                
+    }                                                  //退出码         //终止信号
 }
 
 char *makestring(char *buf){
