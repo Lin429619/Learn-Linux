@@ -1,9 +1,10 @@
-# include<stdio.h>
-# include<stdlib.h>
-# include<unistd.h>
-# include<signal.h>
-# include<sys/wait.h>
-# include<string.h> 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <string.h> 
+#include <fcntl.h>
 
 # define is_delim(x) ((x) == ' ' || (x) == '\t')
 
@@ -12,5 +13,7 @@ char ** splitline(char *);
 void freelist(char**);
 void *emalloc(size_t);
 void *erealloc(void *,size_t);
+void fatal(char *,char *,int);
+int execute(char *argv[]);
 
 

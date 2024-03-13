@@ -2,12 +2,14 @@
 
 int main()
 {
-    char *cmdline, *prompt, **arglist;
+    char *cmdline;
+    char *prompt;
+    char **arglist;
     int result;
-    void strup();
 
     prompt = ">";
-    setup();
+    signal(SIGINT,SIG_IGN);
+    signal(SIGQUIT,SIG_IGN);
 
     while((cmdline = next_cmd(prompt,stdin)) != NULL){
         if((arglist = splitline(cmdline)) != NULL){
@@ -17,11 +19,6 @@ int main()
         free(cmdline);
     }
     return 0;
-}
-
-void setup(){
-    signal(SIGINT,SIG_IGN);
-    signal(SIGQUIT,SIG_IGN);
 }
 
 void fatal(char * s1,char * s2,int n){
@@ -40,8 +37,9 @@ int execute(char *argv[]){
 
     else if(pid == 0){
         signal(SIGINT,SIG_DFL);
-        siganl(SIGQUIT,SIG_DFL);
+        signal(SIGQUIT,SIG_DFL);
         execvp(argv[0],argv);
+        printf("error");
         perror("cannot execute command");
         exit(1);
     }
@@ -57,7 +55,7 @@ char *next_cmd(char * prompt,FILE * fp){
     int bufspace = 0;
     int pos = 0, c;
     printf("%s",prompt);
-    while((c = getc(fp)) ! = EOF){
+    while((c = getc(fp)) != EOF){
         if(pos + 1 >= bufspace){
             if(bufspace == 0)
                 buf = emalloc(BUFSIZ);
@@ -93,11 +91,11 @@ char ** splitline(char *line){
     while(*cp != '\0'){
         while(is_delim(*cp))
             cp++;
-        if(*cp == "\0")
+        if(*cp == '\0')
             break;
         if(argnum + 1 >= spots){
             args = erealloc(args,bufspace + BUFSIZ);
-            bufspace + BUFSIZ;
+            bufspace += BUFSIZ;
             spots += (BUFSIZ / sizeof(char*)); 
         }
         start = cp;
@@ -118,7 +116,7 @@ char * newstr(char *s,int l){
 
 void freelist(char **list){
     char **cp = list;
-    while(**cp)
+    while(*cp)
         free(*cp++);
     free(list);
 }
