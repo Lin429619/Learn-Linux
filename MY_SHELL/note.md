@@ -1,4 +1,4 @@
-# 进程
+## 进程
 
 ##### 通过命令ps了解进程
 * 与ls类似，ps也支持`-a`,`-l`可选项，`UID`列指明用户ID，每个进程都有相应的进程ID(PID)和父进程(PPID)。1号进程——init进程，是所有进程的始祖。`-f`表示格式化输出，也就是用用户名来代替UID。
@@ -49,3 +49,27 @@ n> file	        | 将文件描述符为 n 的文件重定向到 file
 n>> file	    | 将文件描述符为 n 的文件以追加的方式重定向到 file
 n>&m	        | 将输出文件 m 和 n 合并，如2>&1，输出和错误重定向到同一个文件
 n<&m	        | 将输入文件 m 和 n 合并
+
+> * getcwd()函数
+> 函数说明：`getcwd` 方法会将当前工作目录的绝对路径复制到参数 `buffer` 所指的内存空间中，而参数` size `是 `buffer` 所指的空间大小。
+
+第一种基本使用方法：
+```
+#define MAX_SIZE 255
+int main(int argc, const char* argv[]){
+    char path[MAX_SIZE];
+    getcwd(path,sizeof(path));
+    puts(path); 
+    return 0;
+} //存在弊端：当工作目录绝对路径长于所指定的 size 时，则会返回 NULL。
+```
+第二种方法：
+```
+int main(int argc, const char* argv[]){
+    char* path;
+    path = getcwd(NULL, 0);
+    puts(path);
+    free(path);
+    return 0;
+} //getcwd会调用malloc动态分配空间，注意使用完释放。
+```
