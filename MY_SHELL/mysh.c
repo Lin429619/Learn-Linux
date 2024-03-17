@@ -1,136 +1,118 @@
-# include"mysh.h"
+#include "mysh.h"
 
-int main()
+#define TOK_DELIM " \t\r\n"
+
+char * builtin_cmd[] = 
 {
-    char *cmdline;
-    char *prompt;
-    char **arglist;
-    int result;
+    "cd",
+    "help",
+    "exit"
+};
 
-    prompt = ">";
-    signal(SIGINT,SIG_IGN);
-    signal(SIGQUIT,SIG_IGN);
+int (*builtin_func[])(char **) = 
+{
+    &mysh_cd,
+    &mysh_help,
+    &mysh_help
+};
 
-    while((cmdline = next_cmd(prompt,stdin)) != NULL){
-        if((arglist = splitline(cmdline)) != NULL){
-            result = execute(arglist);
-            freelist(arglist);
-        }
-        free(cmdline);
-    }
+int mysh_builtin_nums(){
+    return sizeof(builtin_cmd) / sizeof(builtin_cmd[0]);
+}
+
+int main(int argc, char *argv[])
+{
+    char **args;
+
+    do
+    {
+        char path[256];
+        getcwd(path, 256);
+        char now[300] = "[myshell ";
+        strcat(now, path);
+        strcat(now, " ]$");
+        printf("%s",now);
+
+        args = mysh_split_line();
+
+        free(args);
+    }while(1);
+
     return 0;
 }
 
-void fatal(char * s1,char * s2,int n){
-    fprintf(stderr,"Error:%s,%s\n",s1,s2);
-    exit(n);
+char ** mysh_split_line(){
+    char *line = NULL;
+    ssize_t bufsize = 0;
+    getline(&line, &bufsize, stdin);
+
+    int buffer_size = 100, position = 0;
+    char **tokens = malloc(buffer_size * sizeof(char *));
+    char *token;
+    token = strtok(line, TOK_DELIM);
+    while(token != NULL){
+        tokens[position++] = token;
+        token = strtok(NULL, TOK_DELIM);
+    }
+    tokens[position] = NULL;
+    free(line);
+    return tokens;
 }
 
-int execute(char *argv[]){
-    int pid;
-    int child_info = -1;
-    if(argv[0] == NULL)
-        return 0;
-
-    if((pid = fork()) == -1)
-        perror("fork");
-
-    else if(pid == 0){
-        signal(SIGINT,SIG_DFL);
-        signal(SIGQUIT,SIG_DFL);
-        execvp(argv[0],argv);
-        printf("error");
-        perror("cannot execute command");
-        exit(1);
+int mysh_cd(char **args){
+    if(args[1] == NULL) {
+        perror("Mysh error at cd, lack of args.\n");
     }
     else{
-        if(wait(&child_info) == -1)
-            perror("wait");
+        if(chdir(args[1]) != 0)
+            perror("Mysh error at chdir.\n");
     }
-    return child_info;
+    return 1;
 }
 
-char *next_cmd(char * prompt,FILE * fp){
-    char * buf;
-    int bufspace = 0;
-    int pos = 0, c;
-    printf("%s",prompt);
-    while((c = getc(fp)) != EOF){
-        if(pos + 1 >= bufspace){
-            if(bufspace == 0)
-                buf = emalloc(BUFSIZ);
-            else
-                buf = erealloc(buf,bufspace + BUFSIZ);
-            bufspace += BUFSIZ; 
-        }
-        if(c == '\n')
-            break;
-        buf[pos++] = c;
-    }
-    if(c == EOF && pos == 0)
-        return NULL;
-    buf[pos] = '\0';
-    return buf;
+int mysh_help(char **args){
+    puts("This is Lin's shell.");
+    puts("Here are some built in cmd:");
+    for (int i = 0; i < mysh_builtin_nums(); i++)
+        printf("%s\n", builtin_cmd[i]);
+    return 1;
 }
 
-char ** splitline(char *line){
-    char * newstr();
-    char **args;
-    int spots = 0, bufspace = 0, argnum = 0;
-    char * cp = line;
-    char * start;
-    int len;
+int mysh_exit(char **args){
+    return 0;
+}
 
-    if(line == NULL)
-        return NULL;
+int mysh_launch(char **args){
+    pid_t pid, wpid;
+    int status;
+
+    pid = fork();
+    if(pid == -1)
+        perror("Mysh error at fork.\n");
+    else if(pid == 0)
+    {
+        if(execvp(args[0], args) == -1)
+            perror("Mysh error at execvp.\n");
+        exit(EXIT_FAILURE);
+    }
+    else {
+        do
+        {
+            wpid = waitpid(pid, &status, WUNTRACED);
+        }while(!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+
+    return 1;
+}
+
+int mysh_execute(char **args){
+    if(args[0] == NULL)
+        return 0;
     
-    args = emalloc(BUFSIZ);
-    bufspace = BUFSIZ;
-    spots = BUFSIZ / sizeof(char*);
-
-    while(*cp != '\0'){
-        while(is_delim(*cp))
-            cp++;
-        if(*cp == '\0')
-            break;
-        if(argnum + 1 >= spots){
-            args = erealloc(args,bufspace + BUFSIZ);
-            bufspace += BUFSIZ;
-            spots += (BUFSIZ / sizeof(char*)); 
+    //执行内置命令
+    for(int i = 0; i < mysh_builtin_nums(); i++){
+            if(strcmp(args[0], builtin_cmd[i]) == 0)
+                return (*builtin_func[i])(args);
         }
-        start = cp;
-        len = 1;
-        while(*++cp != '\0' && !(is_delim(*cp)))
-            len++;
-    }
-    args[argnum] = NULL;
-    return args;
-}
-
-char * newstr(char *s,int l){
-    char *rv = emalloc(l + 1);
-    rv[l] = '\0';
-    strncpy(rv,s,l);
-    return rv;
-}
-
-void freelist(char **list){
-    char **cp = list;
-    while(*cp)
-        free(*cp++);
-    free(list);
-}
-
-void *emalloc(size_t n){
-    void *rv;
-    if((rv = malloc(n)) == NULL)
-        fatal("out of memory","",1);
-    return rv;
-}
-
-void *erealloc(void *p,size_t n){
-    void *rv;
-    if((rv = realloc(p,n)) == NULL)
-        fatal("out of memory","",1);
-    return rv;
+    return mysh_launch(args);
 }
