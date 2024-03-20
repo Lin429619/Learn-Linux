@@ -63,6 +63,9 @@ void parse(char *buf){
 
 int main(int argc, char *argv[])
 {
+    strcpy(cdform[0], "/home/lin/");
+    signal(SIGINT, SIG_IGN);  //屏蔽ctrl+c
+
     int status;
 
     do
@@ -73,17 +76,18 @@ int main(int argc, char *argv[])
         strcat(now, " ]$");
         printf("%s", now);
 
-        if(command[0] == NULL) return 1;
         buf = mysh_read_line();
 
         strcpy(history[cmd_num++], buf);
 
         command = mysh_split_line(backupbuf);
+        //printf("cmd:%d\n",**command);
         status = mysh_execute(command);
         
-
         free(buf);
         free(command);
+        buf = NULL;
+        command = NULL;
     } while (status);
     
     return 0;
@@ -91,6 +95,8 @@ int main(int argc, char *argv[])
 
 int mysh_execute(char **command)
 {
+    if(command[0] == NULL) return 1;
+
     //先识别重定向，管道等指令
 
     //识别重定向输出
@@ -168,15 +174,35 @@ int mysh_builtin_nums(){
     return sizeof(builtin_cmd) / sizeof(builtin_cmd[0]);
 }
 
-//cd待补充！！！！
 int mysh_cd(char **command){
     if(command[1] == NULL) {
         perror("Mysh error at cd, lack of args.\n");
+        return 1;
     }
-    else{
-        if(chdir(command[1]) != 0)
-            perror("Mysh error at chdir.\n");
+    
+    if(strcmp(command[1], "-") != 0 && strcmp(command[0], "~") != 0){
+        char cd_buf[BUFFSIZE];
+        getcwd(cd_buf, BUFFSIZE);
+        strcpy(cdform[++cd_num], cd_buf);
     }
+
+
+    if(strcmp(command[1], "~") == 0){
+        strcpy(command[1], "/home/lin/");
+    }
+
+    if(strcmp(command[1], "-") == 0){
+        if(cd_num > 0){
+            strcpy(command[1], cdform[cd_num]);
+        }else {
+            strcpy(command[1], cdform[0]);
+        }
+        cd_num--;
+    }
+
+    if(chdir(command[1]) != 0)
+        perror("Mysh error at chdir.\n");
+
     return 1;
 }
 
@@ -204,7 +230,7 @@ int mysh_exit(char **command){
 int cmd_OutPut(char *buf){
     char OutFile[BUFFSIZE];
     memset(OutFile, 0x00, BUFFSIZE);
-    int num;     //统计重定向符号的数量
+    int num = 0;     //统计重定向符号的数量
     for(int i = 0; i + 1 < strlen(buf); i++){
         if(buf[i] == '>' && buf[i + 1] == ' '){
             num++;
@@ -213,6 +239,7 @@ int cmd_OutPut(char *buf){
     }
     if(num != 1){
         printf("输出重定向指令输入错误\n");
+        //printf("num:%d\n",num);
         return 0;
     }
     for(int i = 0; i < argc; i++){
@@ -270,7 +297,7 @@ int cmd_OutPut(char *buf){
 int cmd_InPut(char *buf){
     char InFile[BUFFSIZE];
     memset(InFile, 0x00, BUFFSIZE);
-    int num;     //统计重定向符号的数量
+    int num = 0;     //统计重定向符号的数量
     for(int i = 0; i + 1 < strlen(buf); i++){
         if(buf[i] == '<' && buf[i + 1] == ' '){
             num++;
@@ -336,7 +363,7 @@ int cmd_InPut(char *buf){
 int cmd_ReOutPut(char *buf){
     char ReOutFile[BUFFSIZE];
     memset(ReOutFile, 0x00, BUFFSIZE);
-    int num;    //统计重定向符号的数量
+    int num = 0;    //统计重定向符号的数量
     for(int i = 0; i + 2 < strlen(buf); i++){
         if(buf[i] == '>' && buf[i + 1] == '>' && buf[i + 2] == ' '){
             num++;
@@ -350,7 +377,7 @@ int cmd_ReOutPut(char *buf){
     for(int i = 0; i < argc; i++){
         if(strcmp(command[i], ">>") == 0){
             if(i + 1 < argc){
-                strcpy(ReOutFile command[i + 1]);
+                strcpy(ReOutFile, command[i + 1]);
             }else{
                 printf("缺少输出文件\n");
                 return 0;
