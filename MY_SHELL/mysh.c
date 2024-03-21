@@ -61,28 +61,48 @@ void parse(char *buf){
 
 }
 
+void getUsername() { // 获取当前登录的用户名
+	struct passwd* pwd = getpwuid(getuid());
+	strcpy(username, pwd->pw_name);
+}
+
+void getHostname() { // 获取主机名
+	gethostname(hostname, BUFFSIZE);
+}
+
+int getCurWorkDir() { // 获取当前的工作目录
+	char* result = getcwd(curPath, BUFFSIZE);
+	if (result == NULL)
+		return ERROR_SYSTEM;
+	else return RESULT_NORMAL;
+}
+
 int main(int argc, char *argv[])
 {
-    strcpy(cdform[0], "/home/lin/");
+    int result = getCurWorkDir();
+	if (ERROR_SYSTEM == result) {
+		fprintf(stderr, "\e[31;1mError: System error while getting current work directory.\n\e[0m");
+		exit(ERROR_SYSTEM);
+	}
+	getUsername();
+	getHostname();
+
+    strcpy(cdform[0], curPath);
     signal(SIGINT, SIG_IGN);  //屏蔽ctrl+c
 
     int status;
 
     do
     {
-        getcwd(sh_path, BUFFSIZE);
-        char now[300] = "[mysh ";
-        strcat(now, sh_path);
-        strcat(now, " ]$");
-        printf("%s", now);
-
+        printf("\e[32;1m%s@%s:%s\e[0m$ ", username, hostname,curPath); // 显示为绿色
+        
         buf = mysh_read_line();
-
         strcpy(history[cmd_num++], buf);
 
         command = mysh_split_line(backupbuf);
-        //printf("cmd:%d\n",**command);
+        //printf("cmd:%s\n",command[0]);
         status = mysh_execute(command);
+        //printf("status:%d\n",status);
         
         free(buf);
         free(command);
@@ -95,12 +115,12 @@ int main(int argc, char *argv[])
 
 int mysh_execute(char **command)
 {
-    if(command[0] == NULL) return 1;
+    if(command == NULL || command[0] == NULL) return 1;
 
     //先识别重定向，管道等指令
 
     //识别重定向输出
-    for(int i = 0; i < MAX_CMD; i++){
+    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
         if(strcmp(command[i], ">") == 0){
             int ret = cmd_OutPut(buf);
             return 1;
@@ -108,7 +128,7 @@ int mysh_execute(char **command)
     }
 
     //识别重定向输入
-    for(int i = 0; i < MAX_CMD; i++){
+    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
         if(strcmp(command[i], "<") == 0){
             int ret = cmd_InPut(buf);
             return 1;
@@ -116,7 +136,7 @@ int mysh_execute(char **command)
     }
 
     //识别追加写重定向
-    for(int i = 0; i < MAX_CMD; i++){
+    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
         if(strcmp(command[i], ">>") == 0){
             int ret = cmd_ReOutPut(buf);
             return 1;
@@ -124,7 +144,7 @@ int mysh_execute(char **command)
     }
 
     //识别管道
-    for(int i = 0; i < MAX_CMD; i++){
+    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
         if(strcmp(command[i], "|") == 0){
             int ret = cmd_Pipe(buf);
             return 1;
@@ -132,7 +152,7 @@ int mysh_execute(char **command)
     }
 
     //识别后台运行
-    for(int i = 0; i < MAX_CMD; i++){
+    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
         if(strcmp(command[i], "&") == 0){
             int ret = cmd_InBackground(buf);
             return 1;
@@ -263,6 +283,8 @@ int cmd_OutPut(char *buf){
     buf[index] = '\0';
     buf[index + 1] = '\0';
     parse(buf); //处理符号前的指令
+    // printf("buf:%s\n",buf);
+    // printf("%s %s\n",argv[1],argv[2]);
 
     pid_t pid,wpid;
     int status;
@@ -273,7 +295,7 @@ int cmd_OutPut(char *buf){
     else if(pid == 0)
     {
         int fd;
-        fd = open(OutFile, O_WRONLY | O_CREAT | O_TRUNC, 7777);
+        fd = open(OutFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         //文件打开失败
         if(fd == -1)
             exit(1);
@@ -339,7 +361,7 @@ int cmd_InPut(char *buf){
     else if(pid == 0)
     {
         int fd;
-        fd = open(InFile, O_RDONLY, 7777);
+        fd = open(InFile, O_RDONLY, 0644);
         //文件打开失败
         if(fd == -1)
             exit(1);
@@ -405,7 +427,7 @@ int cmd_ReOutPut(char *buf){
     else if(pid == 0)
     {
         int fd;
-        fd = open(ReOutFile, O_WRONLY | O_CREAT | O_APPEND, 7777);
+        fd = open(ReOutFile, O_WRONLY | O_CREAT | O_APPEND, 0644);
         //文件打开失败
         if(fd == -1)
             exit(1);
@@ -513,7 +535,6 @@ int cmd_InBackground(char *buf){
         exit(1);
     }else {
         //父进程不需要等待子进程就可以返回
-        exit(0);
     }
 
 }
