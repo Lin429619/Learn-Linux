@@ -4,16 +4,14 @@ char * builtin_cmd[] =
 {
     "cd",
     "help",
-    "exit",
-    "history"
+    "exit"
 };
 
 int (*builtin_func[])(char **) = 
 {
     &mysh_cd,
     &mysh_help,
-    &mysh_exit,
-    &mysh_history
+    &mysh_exit
 };
 
 // 读入命令行参数，并做处理，储存
@@ -43,24 +41,6 @@ char ** mysh_split_line(char *buf)
     return tokens;
 }
 
-void parse(char *buf){
-    int pos = 0;
-    char *token;
-    //初始化数组argv
-    for(int i = 0; i < MAX_CMD; i++){
-        argv[i] = NULL;
-    }
-
-    token = strtok(buf, MYSH_TOK_DELIM);
-    while(token != NULL)
-    {
-        argv[pos++] = token;
-        token = strtok(NULL, MYSH_TOK_DELIM);
-    }
-    argv[pos] = NULL;
-
-}
-
 void getUsername() { // 获取当前登录的用户名
 	struct passwd* pwd = getpwuid(getuid());
 	strcpy(username, pwd->pw_name);
@@ -73,16 +53,16 @@ void getHostname() { // 获取主机名
 int getCurWorkDir() { // 获取当前的工作目录
 	char* result = getcwd(curPath, BUFFSIZE);
 	if (result == NULL)
-		return ERROR_SYSTEM;
-	else return RESULT_NORMAL;
+		return 1;
+	else return 0;
 }
 
 int main(int argc, char *argv[])
 {
     int result = getCurWorkDir();
-	if (ERROR_SYSTEM == result) {
+	if (1 == result) {
 		fprintf(stderr, "\e[31;1mError: System error while getting current work directory.\n\e[0m");
-		exit(ERROR_SYSTEM);
+		exit(1);
 	}
 	getUsername();
 	getHostname();
@@ -94,14 +74,14 @@ int main(int argc, char *argv[])
 
     do
     {
+        result = getCurWorkDir();
         printf("\e[32;1m%s@%s:%s\e[0m$ ", username, hostname,curPath); // 显示为绿色
         
         buf = mysh_read_line();
-        strcpy(history[cmd_num++], buf);
 
         command = mysh_split_line(backupbuf);
         //printf("cmd:%s\n",command[0]);
-        status = mysh_execute(command);
+        result = mysh_execute(command);
         //printf("status:%d\n",status);
         
         free(buf);
@@ -118,56 +98,6 @@ int mysh_execute(char **command)
     if(command == NULL || command[0] == NULL) return 1;
 
     //先识别重定向，管道等指令
-
-    //识别重定向输出
-    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
-        if(strcmp(command[i], ">") == 0){
-            int ret = cmd_OutPut(buf);
-            return 1;
-        }
-    }
-
-    //识别重定向输入
-    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
-        if(strcmp(command[i], "<") == 0){
-            int ret = cmd_InPut(buf);
-            return 1;
-        }
-    }
-
-    //识别追加写重定向
-    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
-        if(strcmp(command[i], ">>") == 0){
-            int ret = cmd_ReOutPut(buf);
-            return 1;
-        }
-    }
-
-    //识别管道
-    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
-        if(strcmp(command[i], "|") == 0){
-            int ret = cmd_Pipe(buf);
-            return 1;
-        }
-    }
-
-    //识别后台运行
-    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
-        if(strcmp(command[i], "&") == 0){
-            int ret = cmd_InBackground(buf);
-            return 1;
-        }
-    }
-
-    //识别内置命令
-    for (int i = 0; i < mysh_builtin_nums(); i++)
-        if(strcmp(command[0], builtin_cmd[i]) == 0)
-            return (*builtin_func[i])(command);
-    return mysh_launch(command);
-}
-
-int mysh_launch(char **command)
-{
     pid_t pid, wpid;
     int status;
 
@@ -176,9 +106,16 @@ int mysh_launch(char **command)
         perror("Mysh error at fork.\n");
     else if(pid == 0)
     {
-        if(execvp(command[0], command) == -1)
-            perror("Mysh error at execvp.\n");
-        exit(EXIT_FAILURE);
+        //获取标准输入、输出的文件标识符
+		int inFds = dup(STDIN_FILENO);
+		int outFds = dup(STDOUT_FILENO);
+
+        int ret = cmd_WithPipe(0, argc);
+
+		//还原标准输入、输出重定向 
+		dup2(inFds, STDIN_FILENO);
+		dup2(outFds, STDOUT_FILENO);
+		exit(ret);
     }
     else {
         do
@@ -187,6 +124,20 @@ int mysh_launch(char **command)
         }while(!WIFEXITED(status) && !WIFSIGNALED(status));
     }
 
+    //识别后台运行
+    for(int i = 0; i < MAX_CMD && command[i] != NULL; i++){
+        if(strcmp(command[i], "&") == 0){
+            int ret = cmd_InBackground(command, i);
+            return 1;
+        }
+    }
+
+    //识别内置命令
+    for (int i = 0; i < mysh_builtin_nums(); i++){
+        if(strcmp(command[0], builtin_cmd[i]) == 0)
+            return (*builtin_func[i])(command);
+    }
+    
     return 1;
 }
 
@@ -194,30 +145,37 @@ int mysh_builtin_nums(){
     return sizeof(builtin_cmd) / sizeof(builtin_cmd[0]);
 }
 
-int mysh_cd(char **command){
+int mysh_cd(char **command){  //处理cd- cd~ 和普通的cd命令
     if(command[1] == NULL) {
         perror("Mysh error at cd, lack of args.\n");
         return 1;
     }
     
-    if(strcmp(command[1], "-") != 0 && strcmp(command[0], "~") != 0){
+    /* if(strcmp(command[1], "-") != 0 && strcmp(command[1], "~") != 0){
         char cd_buf[BUFFSIZE];
         getcwd(cd_buf, BUFFSIZE);
         strcpy(cdform[++cd_num], cd_buf);
-    }
+    } */
+    char cd_buf[BUFFSIZE];
+    getcwd(cd_buf, BUFFSIZE);
+    strcpy(cdform[++cd_num], cd_buf);
 
-
+    char path[BUFFSIZE];
+    strcpy(path, "/home/");
+    strcat(path, username);
+    strcat(path, "/");
     if(strcmp(command[1], "~") == 0){
-        strcpy(command[1], "/home/lin/");
+        strcpy(command[1], path);
     }
 
     if(strcmp(command[1], "-") == 0){
-        if(cd_num > 0){
+        if(--cd_num > 0){
             strcpy(command[1], cdform[cd_num]);
         }else {
             strcpy(command[1], cdform[0]);
         }
-        cd_num--;
+        printf("%s\n",command[1]);
+        //cd_num--;
     }
 
     if(chdir(command[1]) != 0)
@@ -235,56 +193,131 @@ int mysh_help(char **command){
     return 1;
 }
 
-//待测试,修改
-int mysh_history(char **command){
-    for(int i = 0; i < cmd_num; i++){
-        printf("%s\n",history[i]);
-    }
-    return 1;
+int mysh_exit(char **command){
+    pid_t pid = getpid();
+	kill(pid, SIGTERM);
 }
 
-int mysh_exit(char **command){
+int cmd_WithPipe(int left ,int right)
+{
+    //判断是否有管道命令
+    int pipeIdx = -1;
+	for (int i = left; i < right; i++) {
+		if (strcmp(command[i], "|") == 0) {
+			pipeIdx = i;
+			break;
+		}
+	}
+	if (pipeIdx == -1) { // 不含有管道命令
+		return cmd_WithRedi(left, right);
+	} else if (pipeIdx + 1 == right) { // 管道命令'|'后续没有指令，参数缺失
+		printf("管道缺少后续指令\n");
+        return 1;   
+	}
+
+    int fds[2];
+    pid_t pid, wpid;
+    int status;
+	if (pipe(fds) == -1) {
+		perror("Mysh error at pipe.\n");
+        return 1;
+	}
+
+	pid = fork();
+	if (pid == -1) {
+		perror("Mysh error at pipe_fork.\n");
+        exit(1);
+	} 
+    else if (pid == 0) {  //子进程执行单个命令
+		close(fds[0]);
+		dup2(fds[1], STDOUT_FILENO);  //将标准输出重定向到fds[1]
+		close(fds[1]);
+		
+		int result = cmd_WithRedi(left, pipeIdx);
+        if (result == 1) { //执行失败
+            perror("Failed to execute command before pipe.\n");
+            exit(1);
+        }
+	} 
+    else {  //父进程递归执行后续命令
+        do{
+            wpid = waitpid(pid, &status, WUNTRACED);
+        }while(!WIFEXITED(status) && !WIFSIGNALED(status));
+
+		if(pipeIdx + 1 < right){
+			close(fds[1]);
+			dup2(fds[0], STDIN_FILENO);  //将标准输入重定向到fds[0]
+			close(fds[0]);
+			int result = cmd_WithPipe(pipeIdx + 1, right);  //递归执行后续指令
+            if (result == 1) { //执行失败
+                perror("Failed to execute command after pipe.\n");
+                exit(1);
+            }
+		}        
+	}
+
     return 0;
 }
 
-int cmd_OutPut(char *buf){
-    char OutFile[BUFFSIZE];
-    memset(OutFile, 0x00, BUFFSIZE);
-    int num = 0;     //统计重定向符号的数量
-    for(int i = 0; i + 1 < strlen(buf); i++){
-        if(buf[i] == '>' && buf[i + 1] == ' '){
-            num++;
-            break;
-        }
-    }
-    if(num != 1){
-        printf("输出重定向指令输入错误\n");
-        //printf("num:%d\n",num);
-        return 0;
-    }
-    for(int i = 0; i < argc; i++){
-        if(strcmp(command[i], ">") == 0){
-            if(i + 1 < argc){
-                strcpy(OutFile, command[i + 1]);
-            }else{
-                printf("缺少输出文件\n");
-                return 0;
+int cmd_WithRedi(int left ,int right)
+{
+    //判断是否存在重定向和追加命令
+    int inNum = 0, outNum = 0, reoutNum = 0;
+	char *inFile = NULL, *outFile = NULL, *reoutFile = NULL;
+	int endIdx = right; // 指令在重定向前的终止下标
+
+    for (int i = left; i < right; i++) {
+		if (strcmp(command[i], "<") == 0) { // 输入重定向
+			inNum++;
+			if (i + 1 < right)
+				inFile = command[i + 1];
+			else {
+                printf("缺少输入文件\n");
+                return 1;   // 重定向符号后缺少文件名
             }
+
+			if (endIdx == right) endIdx = i;
+		} else if (strcmp(command[i], ">") == 0) { // 输出重定向
+			outNum++;
+			if (i + 1 < right)
+				outFile = command[i + 1];
+			else {
+                printf("缺少输出文件\n");
+                return 1;   // 重定向符号后缺少文件名
+            } 
+				
+			if (endIdx == right) endIdx = i;
+		}else if (strcmp(command[i], ">>") == 0) { // 追加
+			reoutNum++;
+			if (i + 1 < right)
+				reoutFile = command[i + 1];
+			else {
+                printf("缺少输出文件\n");
+                return 1;   // 重定向符号后缺少文件名
+            }
+				
+			if (endIdx == right) endIdx = i;
         }
+	}
+
+    //处理各项命令
+    if(inNum > 1){
+        printf("输入重定向指令输入错误\n");
+        return 1;
+    }else if (outNum > 1){
+        printf("输出重定向指令输入错误\n");
+        return 1;
+    }else if (reoutNum > 1){
+        printf("追加输出重定向指令输入错误\n");
+        return 1;
     }
 
-    int index;
-    for(int j = 0; j < strlen(buf); j++){
-        if(buf[j] == '>'){
-            index = j;
-            break;
-        }
-    }
-    buf[index] = '\0';
-    buf[index + 1] = '\0';
-    parse(buf); //处理符号前的指令
-    // printf("buf:%s\n",buf);
-    // printf("%s %s\n",argv[1],argv[2]);
+    //提取有效命令
+    char* argv[BUFFSIZE];
+	for (int i = left; i < endIdx; i++)
+		argv[i] = command[i];
+	argv[endIdx] = NULL;
+    //printf("%s\n",argv[endIdx - 1]);
 
     pid_t pid,wpid;
     int status;
@@ -292,234 +325,36 @@ int cmd_OutPut(char *buf){
     pid = fork();
     if(pid == -1)
         perror("Mysh error at OutPut_fork.\n");
-    else if(pid == 0)
-    {
-        int fd;
-        fd = open(OutFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        //文件打开失败
-        if(fd == -1)
-            exit(1);
-        dup2(fd, STDOUT_FILENO);
-        execvp(argv[0], argv);
-        if(fd != STDOUT_FILENO){
-            close(fd);
-        }
-        printf("%s:error.\n",argv[0]);
-        exit(1);
-    }
-    else {
-        do
-        {
-            wpid = waitpid(pid, &status, WUNTRACED);
-        }while(!WIFEXITED(status) && !WIFSIGNALED(status));
-    }
-    return 1;
-}
-
-int cmd_InPut(char *buf){
-    char InFile[BUFFSIZE];
-    memset(InFile, 0x00, BUFFSIZE);
-    int num = 0;     //统计重定向符号的数量
-    for(int i = 0; i + 1 < strlen(buf); i++){
-        if(buf[i] == '<' && buf[i + 1] == ' '){
-            num++;
-            break;
-        }
-    }
-    if(num != 1){
-        printf("输入重定向指令输入错误\n");
-        return 0;
-    }
-    for(int i = 0; i < argc; i++){
-        if(strcmp(command[i], "<") == 0){
-            if(i + 1 < argc){
-                strcpy(InFile, command[i + 1]);
-            }else{
-                printf("缺少输入指令\n");
-                return 0;
-            }
-        }
-    }
-
-    int index;
-    for(int j = 0; j < strlen(buf); j++){
-        if(buf[j] == '<'){
-            index = j;
-            break;
-        }
-    }
-    buf[index] = '\0';
-    buf[index + 1] = '\0';
-    parse(buf); //处理符号前的指令
-
-    pid_t pid,wpid;
-    int status;
-
-    pid = fork();
-    if(pid == -1)
-        perror("Mysh error at InPut_fork.\n");
-    else if(pid == 0)
-    {
-        int fd;
-        fd = open(InFile, O_RDONLY, 0644);
-        //文件打开失败
-        if(fd == -1)
-            exit(1);
-        dup2(fd, STDIN_FILENO);
-        execvp(argv[0], argv);
-        if(fd != STDIN_FILENO){
-            close(fd);
-        }
-        printf("%s:error.\n",argv[0]);
-        exit(1);
-    }
-    else {
-        do
-        {
-            wpid = waitpid(pid, &status, WUNTRACED);
-        }while(!WIFEXITED(status) && !WIFSIGNALED(status));
-    }
-    return 1;
-}
-
-int cmd_ReOutPut(char *buf){
-    char ReOutFile[BUFFSIZE];
-    memset(ReOutFile, 0x00, BUFFSIZE);
-    int num = 0;    //统计重定向符号的数量
-    for(int i = 0; i + 2 < strlen(buf); i++){
-        if(buf[i] == '>' && buf[i + 1] == '>' && buf[i + 2] == ' '){
-            num++;
-            break;
-        }
-    }
-    if(num != 1){
-        printf("追加输出重定向指令输入错误\n");
-        return 0;
-    }
-    for(int i = 0; i < argc; i++){
-        if(strcmp(command[i], ">>") == 0){
-            if(i + 1 < argc){
-                strcpy(ReOutFile, command[i + 1]);
-            }else{
-                printf("缺少输出文件\n");
-                return 0;
-            }
-        }
-    }
-
-    int index;
-    for(int j = 0; j + 2 < strlen(buf); j++){
-        if(buf[j] == '>' && buf[j + 1] == '>' && buf[j + 2] == ' '){
-            index = j;
-            break;
-        }
-    }
-    buf[index] = '\0';
-    buf[index + 1] = '\0';
-    parse(buf); //处理符号前的指令
-
-    pid_t pid,wpid;
-    int status;
-
-    pid = fork();
-    if(pid == -1)
-        perror("Mysh error at ReOutPut_fork.\n");
-    else if(pid == 0)
-    {
-        int fd;
-        fd = open(ReOutFile, O_WRONLY | O_CREAT | O_APPEND, 0644);
-        //文件打开失败
-        if(fd == -1)
-            exit(1);
-        dup2(fd, STDOUT_FILENO);
-        execvp(argv[0], argv);
-        if(fd != STDOUT_FILENO){
-            close(fd);
-        }
-        printf("%s:error.\n",argv[0]);
-        exit(1);
-    }
-    else {
-        do
-        {
-            wpid = waitpid(pid, &status, WUNTRACED);
-        }while(!WIFEXITED(status) && !WIFSIGNALED(status));
-    }
-    return 1;
-}
-
-int cmd_Pipe(char *buf){
-    int j, len;
-    for (j = 0; j < strlen(buf); j++){
-        if(buf[j] == '|')
-            break;
-    }
-
-    len = j;
-    char outputBuf[len];
-    memset(outputBuf, 0x00, len);
-    char inputBuf[strlen(buf) - len];
-    memset(inputBuf, 0x00, strlen(buf) - len);
-    for(int i = 0; i < len - 1; i++){
-        outputBuf[i] = buf[i];
-    }
-    for(int i = 0; i < strlen(buf) - len - 1; i++){
-        inputBuf[i] = buf[len + 2 + i];
-    }
-
-    int pipefd[2];
-    pid_t pid, wpid;
-    int status;
-    if(pipe(pipefd) == -1){
-        perror("Mysh error at pipe.\n");
-        exit(1);
-    }
-
-    pid = fork();
-    if(pid == -1){
-        perror("Mysh error at pipe_fork.\n");
-    }
     else if(pid == 0){
-        close(pipefd[0]);
-        dup2(pipefd[1], STDOUT_FILENO);
-        parse(outputBuf);
-        execvp(argv[0], argv);
-        if(pipefd[1] != STDOUT_FILENO){
-            close(pipefd[1]);
+        if(outNum){
+            freopen(outFile, "w", stdout);
         }
+        else if(inNum){
+            freopen(inFile, "r", stdin);
+        }
+        else if(reoutNum){
+            freopen(reoutFile, "a+", stdout);
+        }
+        execvp(argv[left], argv + left);
     }
     else {
-        do
-        {
-            wpid = waitpid(pid, &status, WUNTRACED);
-        }while(!WIFEXITED(status) && !WIFSIGNALED(status));
-
-        close(pipefd[1]);
-        dup2(pipefd[0], STDIN_FILENO);
-        parse(inputBuf);
-        execvp(argv[0], argv);
-        if(pipefd[0] != STDIN_FILENO){
-            close(pipefd[0]);
+            do
+            {
+                wpid = waitpid(pid, &status, WUNTRACED);
+            }while(!WIFEXITED(status) && !WIFSIGNALED(status));
         }
-    }
-    return 1;
 
+    return 0;
 }
 
-int cmd_InBackground(char *buf){
-    char backgroundBuf[strlen(buf)];
-    memset(backgroundBuf, 0x00, strlen(buf));
-    //提取&前的指令并做处理
-    for (int i = 0; i < strlen(buf); i++){
-        backgroundBuf[i] = buf[i];
-        if(buf[i] == '&'){
-            backgroundBuf[i] = '\0';
-            backgroundBuf[i - 1] = '\0';
-            break;
-        }
+int cmd_InBackground(char **command, int index){
+    char* argv[BUFFSIZE];
+    for(int i = 0; i < index; i++){
+        argv[i] = command[i];
     }
     pid_t pid, wpid;
     int status;
+
     pid = fork();
     if(pid == -1){
         perror("Mysh error at InBackground_fork.\n");
@@ -529,12 +364,9 @@ int cmd_InBackground(char *buf){
         freopen("/dev/null", "r", stdin);
         signal(SIGCHLD, SIG_IGN);
         //子进程调用该函数，让Linux接管该子进程
-        parse(backgroundBuf);
         execvp(argv[0], argv);
-        printf("%s:error.\n", argv[0]);
-        exit(1);
     }else {
-        //父进程不需要等待子进程就可以返回
+        //父进程不需要等待子进程结束就可以返回
     }
 
 }
