@@ -7,6 +7,7 @@ char * builtin_cmd[] =
     "exit"
 };
 
+//包含的内置命令
 int (*builtin_func[])(char **) = 
 {
     &mysh_cd,
@@ -24,7 +25,7 @@ char * mysh_read_line()
     return buf;
 }
 
-//处理备份参数数组
+//切割备份参数数组
 char ** mysh_split_line(char *buf)
 {
     int buffer_size = MAX_CMD, position = 0;
@@ -41,17 +42,20 @@ char ** mysh_split_line(char *buf)
     return tokens;
 }
 
-void getUsername() { // 获取当前登录的用户名
+//获取当前登录的用户名
+void getUsername() {  
 	struct passwd* pwd = getpwuid(getuid());
 	strcpy(username, pwd->pw_name);
 }
 
-void getHostname() { // 获取主机名
+//获取主机名
+void getHostname() {  
 	gethostname(hostname, BUFFSIZE);
 }
 
-int getCurWorkDir() { // 获取当前的工作目录
-	char* result = getcwd(curPath, BUFFSIZE);
+//获取当前的工作目录
+int getCurWorkDir() {   
+	char* result = getcwd(curpath, BUFFSIZE);
 	if (result == NULL)
 		return 1;
 	else return 0;
@@ -67,7 +71,7 @@ int main(int argc, char *argv[])
 	getUsername();
 	getHostname();
 
-    strcpy(cdform[0], curPath);
+    strcpy(cd_former, curpath);
     signal(SIGINT, SIG_IGN);  //屏蔽ctrl+c
 
     int status;
@@ -75,8 +79,7 @@ int main(int argc, char *argv[])
     do
     {
         result = getCurWorkDir();
-        printf("\e[32;1m%s@%s:%s\e[0m$ ", username, hostname,curPath); // 显示为绿色
-        
+        printf("\e[32;1m%s@%s:%s\e[0m$ ", username, hostname,curpath);  //显示为绿色
         buf = mysh_read_line();
 
         command = mysh_split_line(backupbuf);
@@ -145,44 +148,35 @@ int mysh_builtin_nums(){
     return sizeof(builtin_cmd) / sizeof(builtin_cmd[0]);
 }
 
-int mysh_cd(char **command){  //处理cd- cd~ 和普通的cd命令
+//处理cd- cd~ 和普通的cd命令
+int mysh_cd(char **command){  
     if(command[1] == NULL) {
         perror("Mysh error at cd, lack of args.\n");
         return 1;
     }
     
-    /* if(strcmp(command[1], "-") != 0 && strcmp(command[1], "~") != 0){
-        char cd_buf[BUFFSIZE];
-        getcwd(cd_buf, BUFFSIZE);
-        strcpy(cdform[++cd_num], cd_buf);
-    } */
-    char cd_buf[BUFFSIZE];
-    getcwd(cd_buf, BUFFSIZE);
-    strcpy(cdform[++cd_num], cd_buf);
-
     char path[BUFFSIZE];
-    strcpy(path, "/home/");
-    strcat(path, username);
-    strcat(path, "/");
+    getcwd(path, BUFFSIZE);
+
+    char home_path[BUFFSIZE];
+    strcpy(home_path, "/home/");
+    strcat(home_path, username);
+    strcat(home_path, "/");
     if(strcmp(command[1], "~") == 0){
-        strcpy(command[1], path);
+        strcpy(command[1], home_path);
     }
 
     if(strcmp(command[1], "-") == 0){
-        if(--cd_num > 0){
-            strcpy(command[1], cdform[cd_num]);
-        }else {
-            strcpy(command[1], cdform[0]);
-        }
+        strcpy(command[1], cd_former);
         printf("%s\n",command[1]);
-        //cd_num--;
     }
 
     if(chdir(command[1]) != 0)
         perror("Mysh error at chdir.\n");
+    strcpy(cd_former, path);
 
     return 1;
-}
+} 
 
 int mysh_help(char **command){
     puts("This is Lin's shell.");
@@ -208,9 +202,9 @@ int cmd_WithPipe(int left ,int right)
 			break;
 		}
 	}
-	if (pipeIdx == -1) { // 不含有管道命令
+	if (pipeIdx == -1) {  //不含有管道命令
 		return cmd_WithRedi(left, right);
-	} else if (pipeIdx + 1 == right) { // 管道命令'|'后续没有指令，参数缺失
+	} else if (pipeIdx + 1 == right) {  //管道命令'|'后续没有指令，参数缺失
 		printf("管道缺少后续指令\n");
         return 1;   
 	}
@@ -264,36 +258,36 @@ int cmd_WithRedi(int left ,int right)
     //判断是否存在重定向和追加命令
     int inNum = 0, outNum = 0, reoutNum = 0;
 	char *inFile = NULL, *outFile = NULL, *reoutFile = NULL;
-	int endIdx = right; // 指令在重定向前的终止下标
+	int endIdx = right;   //指令在重定向前的终止下标
 
     for (int i = left; i < right; i++) {
-		if (strcmp(command[i], "<") == 0) { // 输入重定向
+		if (strcmp(command[i], "<") == 0) {  //输入重定向
 			inNum++;
 			if (i + 1 < right)
 				inFile = command[i + 1];
 			else {
                 printf("缺少输入文件\n");
-                return 1;   // 重定向符号后缺少文件名
+                return 1;    //重定向符号后缺少文件名
             }
 
 			if (endIdx == right) endIdx = i;
-		} else if (strcmp(command[i], ">") == 0) { // 输出重定向
+		} else if (strcmp(command[i], ">") == 0) {  //输出重定向
 			outNum++;
 			if (i + 1 < right)
 				outFile = command[i + 1];
 			else {
                 printf("缺少输出文件\n");
-                return 1;   // 重定向符号后缺少文件名
+                return 1;    //重定向符号后缺少文件名
             } 
 				
 			if (endIdx == right) endIdx = i;
-		}else if (strcmp(command[i], ">>") == 0) { // 追加
+		}else if (strcmp(command[i], ">>") == 0) {  //追加命令
 			reoutNum++;
 			if (i + 1 < right)
 				reoutFile = command[i + 1];
 			else {
                 printf("缺少输出文件\n");
-                return 1;   // 重定向符号后缺少文件名
+                return 1;   //重定向符号后缺少文件名
             }
 				
 			if (endIdx == right) endIdx = i;
