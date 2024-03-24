@@ -125,6 +125,8 @@ int mysh_execute(char **command)
         {
             wpid = waitpid(pid, &status, WUNTRACED);
         }while(!WIFEXITED(status) && !WIFSIGNALED(status));
+        //检查子进程终止状态的宏
+        //即子进程没有正常退出或因为信号而终止，父进程就会一直处于等待状态
     }
 
     //识别后台运行
