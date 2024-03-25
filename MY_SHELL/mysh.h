@@ -15,7 +15,7 @@
 #define MYSH_TOK_DELIM " \t\r\n"
 
 char * mysh_read_line();
-char ** mysh_split_line();
+char ** mysh_split_line(char *);
 int mysh_execute(char **); 
 int mysh_builtin_nums();
 int mysh_cd(char **);

@@ -28,18 +28,30 @@ char * mysh_read_line()
 //切割备份参数数组
 char ** mysh_split_line(char *buf)
 {
-    int buffer_size = MAX_CMD, position = 0;
-    char **tokens = malloc(buffer_size * sizeof(char *));
-    char *token;
-    token = strtok(buf, MYSH_TOK_DELIM);
-    while(token != NULL)
-    {
-        tokens[position++] = token;
-        token = strtok(NULL, MYSH_TOK_DELIM);
+    int buffer_size = MAX_CMD, position = 0, cnt = 0;
+    char *tokens[MAX_CMD];
+    char **argvs = malloc(buffer_size * sizeof(char *));
+    char *token1, *token2;
+
+    //先根据管道符"|"切割
+    token1 = strtok(buf, "|");
+    while(token1 != NULL){
+        tokens[cnt++] = token1;
+        tokens[cnt++] = "|";
+        token1 = strtok(NULL, "|");
+    }
+
+    //再根据空格切割
+    for(int i = 0; i < cnt - 1; i++){
+        char *token2 = strtok(tokens[i], MYSH_TOK_DELIM);
+        while(token2 != NULL){
+            argvs[position++] = token2;
+            token2 = strtok(NULL, MYSH_TOK_DELIM);
+        }
     }
     argc = position;
-    tokens[position] = NULL;
-    return tokens;
+    argvs[position] = NULL;
+    return argvs;
 }
 
 //获取当前登录的用户名
