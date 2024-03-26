@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 
         command = mysh_split_line(backupbuf);
         //printf("cmd:%s\n",command[0]);
-        result = mysh_execute(command);
+        status = mysh_execute(command);
         //printf("status:%d\n",status);
         
         free(buf);
