@@ -204,6 +204,7 @@ int mysh_help(char **command){
 int mysh_exit(char **command){
     pid_t pid = getpid();
 	kill(pid, SIGTERM);
+    return 0;
 }
 
 int cmd_WithPipe(int left ,int right)
