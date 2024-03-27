@@ -112,7 +112,13 @@ int mysh_execute(char **command)
 {
     if(command == NULL || command[0] == NULL) return 1;
 
-    //先识别重定向，管道等指令
+    //先识别内置命令
+    for (int i = 0; i < mysh_builtin_nums(); i++){
+        if(strcmp(command[0], builtin_cmd[i]) == 0)
+            return (*builtin_func[i])(command);
+    }
+
+    //再识别重定向，管道等指令
     pid_t pid, wpid;
     int status;
 
@@ -147,12 +153,6 @@ int mysh_execute(char **command)
             int ret = cmd_InBackground(command, i);
             return 1;
         }
-    }
-
-    //识别内置命令
-    for (int i = 0; i < mysh_builtin_nums(); i++){
-        if(strcmp(command[0], builtin_cmd[i]) == 0)
-            return (*builtin_func[i])(command);
     }
     
     return 1;
@@ -323,8 +323,9 @@ int cmd_WithRedi(int left ,int right)
 
     //提取有效命令
     char* argv[BUFFSIZE];
-	for (int i = left; i < endIdx; i++)
+	for (int i = left; i < endIdx; i++){
 		argv[i] = command[i];
+    }
 	argv[endIdx] = NULL;
     //printf("%s\n",argv[endIdx - 1]);
 
@@ -335,19 +336,40 @@ int cmd_WithRedi(int left ,int right)
     if(pid == -1)
         perror("Mysh error at OutPut_fork.\n");
     else if(pid == 0){
+        if(inNum){
+            int fd_in = open(inFile, O_RDONLY);
+            if(fd_in == -1){
+                perror("Mysh error at inFile.\n");
+                exit(EXIT_FAILURE);
+            }
+            dup2(fd_in, STDIN_FILENO);
+            close(fd_in);
+        }
         if(outNum){
-            freopen(outFile, "w", stdout);
+            int fd_out = open(outFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if(fd_out == -1){
+                perror("Mysh error at outFile.\n");
+                exit(EXIT_FAILURE);
+            }
+            dup2(fd_out, STDOUT_FILENO);
+            close(fd_out);
         }
-        else if(inNum){
-            freopen(inFile, "r", stdin);
+        if(reoutNum){
+            int fd_reout = open(reoutFile, O_WRONLY | O_CREAT | O_APPEND, 0644);
+            if(fd_reout == -1){
+                perror("Mysh error at reoutFile.\n");
+                exit(EXIT_FAILURE);
+            }
+            dup2(fd_reout, STDOUT_FILENO);
+            close(fd_reout);
         }
-        else if(reoutNum){
-            freopen(reoutFile, "a+", stdout);
-        }
+
         execvp(argv[left], argv + left);
+        perror("Mysh error at Redi_execvp.\n");
+        exit(EXIT_FAILURE);
     }
     else {
-            do
+           do
             {
                 wpid = waitpid(pid, &status, WUNTRACED);
             }while(!WIFEXITED(status) && !WIFSIGNALED(status));
