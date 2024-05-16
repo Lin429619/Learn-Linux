@@ -73,7 +73,7 @@ void* Merge_Sort(void* arg) {
         pthread_create(&thread1, NULL, Merge_Sort, arg1);
         pthread_create(&thread2, NULL, Merge_Sort, arg2);
 
-        //等待两个子进程完成
+        //等待两个子线程完成
         pthread_join(thread1, NULL);
         pthread_join(thread2, NULL);
         
