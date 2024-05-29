@@ -21,3 +21,16 @@ int getaddrinfo(const char *host, const char *service, const struct addrinfo *hi
 #####  释放`addrinfo`列表:`freeaddrinfo()`函数
 > `getaddrinfo()`函数会动态地为`result`引用的所有结构分配内存,其结果是调用者必须要在不再需要这些结构时释放它们。使用`freeaddrinfo()`函数可以方便地在一个步骤中执行这个释放任务。如果要保留`addrinfo`结构或其关联的`socket`地址结构的一个副本，必须在调用`freeaddrinfo()`之前复制这些结构。
 
+##### `shutdown()`系统调用
+> * int shutdown(int sockfd, int how)
+> 在套接字上调用`close()`会将双向通信通道的两端都关闭,系统调用`shutdown()`可以根据参数`how`的值选择关闭套接字通道的一端还是两端。
+> `SHUT_RD`:关闭连接的读端。
+> `SHUT_WR`:关闭连接的写端。在`shutdown()`中最常用到的操作就是`SHUT_WR`,有时候也被称为半关闭套接字。
+> SHUT_RDWR:将连接的读端和写端都关闭.
+> * 除了参数 `how`的语义之外,`shutdown()`同`close()`之间的另一个重要区别是:无论该套接字上是否还关联有其他的文件描述符,`shutdown()`都会关闭套接字通道。换句话说,`shutdown()`是根据打开的文件描述`(open file description)`来执行操作,而同文件描述符无关。
+> * `shutdown()`并不会关闭文件描述符,就算参数`how`指定为`SHUT_RDWR`时也是如此。要关闭文件描述符,我们必须另外调用`close()`。
+
+##### `sendfile()`系统调用
+> * ==零拷贝传输==：应用程序调用`sendfile()`时,文件内容会直接传送到套接字上,而不会经过用户空间。
+> 可以使用`sendfile()`将数据从文件传递到套接字上,但==反过来就不行==。另外,也不能通过`sendfile()`在两个套接字之间直接传送数据。
+
