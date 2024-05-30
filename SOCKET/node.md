@@ -1,4 +1,4 @@
-##### socket系统调用
+##### `socket`系统调用
 * `socket()`创建一个新 `socket`。
 *  `bind()`将一个 `socket` 绑定到一个地址上。通常,服务器需要使用这个调用来将其 `socket` 绑定到一个众所周知的地址上使得客户端能够定位到该 `socket` 上。
 * `listen()`允许一个流 `socket` 接受来自其他`socket` 的接入连接。
@@ -34,3 +34,13 @@ int getaddrinfo(const char *host, const char *service, const struct addrinfo *hi
 > * ==零拷贝传输==：应用程序调用`sendfile()`时,文件内容会直接传送到套接字上,而不会经过用户空间。
 > 可以使用`sendfile()`将数据从文件传递到套接字上,但==反过来就不行==。另外,也不能通过`sendfile()`在两个套接字之间直接传送数据。
 
+##### `setsockopt()`和 `getsockopt()`（分别用于设定和获取套接字选项）
+```
+int setsockopt(int socket, int level, int option_name, const void *option_value, socklen_t option_len);
+```
+> * `option_name`: 需要设置的选项名,常用选项有以下：
+> SO_REUSEADDR：允许重用本地地址和端口
+> SO_RCVBUF：接收缓冲区大小
+> SO_SNDBUF：发送缓冲区大小
+> 
+> ==SO_REUSEADDR套接字==选项最常见的用途:避免当TCP服务器重启时,尝试将套接字绑定到当前已经同 TCP 结点相关联的端口上时出现的EADDRINUSE(地址已使用)错误。
