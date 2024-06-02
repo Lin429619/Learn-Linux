@@ -11,13 +11,13 @@
 
 ##### `getaddrinfo()`函数
 > 给定一个主机名和服务器名,`getaddrinfo()`函数返回一个`socket`地址结构列表,每个结构都包含一个地址和端口号。
-
 > `getnameinfo()`函数是`getaddrinfo()`的逆函数。给定一个socket地址结构,会返回一个包含对应的主机和服务名的字符串或者在无法解析名字时返回一个等价的数值。
 
 ```
 int getaddrinfo(const char *host, const char *service, const struct addrinfo *hints, struct addrinfo **result);
 // result参数返回一个结构列表而非单个结构
 ```
+
 #####  释放`addrinfo`列表:`freeaddrinfo()`函数
 > `getaddrinfo()`函数会动态地为`result`引用的所有结构分配内存,其结果是调用者必须要在不再需要这些结构时释放它们。使用`freeaddrinfo()`函数可以方便地在一个步骤中执行这个释放任务。如果要保留`addrinfo`结构或其关联的`socket`地址结构的一个副本，必须在调用`freeaddrinfo()`之前复制这些结构。
 
@@ -33,9 +33,6 @@ int getaddrinfo(const char *host, const char *service, const struct addrinfo *hi
 ##### `sendfile()`系统调用
 > * ==零拷贝传输==：应用程序调用`sendfile()`时,文件内容会直接传送到套接字上,而不会经过用户空间。
 > 可以使用`sendfile()`将数据从文件传递到套接字上,但==反过来就不行==。另外,也不能通过`sendfile()`在两个套接字之间直接传送数据。
-
-
-
 
 ##### `setsockopt()`和 `getsockopt()`（分别用于设定和获取套接字选项）
 ```
