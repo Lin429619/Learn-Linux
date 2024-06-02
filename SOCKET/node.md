@@ -34,6 +34,9 @@ int getaddrinfo(const char *host, const char *service, const struct addrinfo *hi
 > * ==零拷贝传输==：应用程序调用`sendfile()`时,文件内容会直接传送到套接字上,而不会经过用户空间。
 > 可以使用`sendfile()`将数据从文件传递到套接字上,但==反过来就不行==。另外,也不能通过`sendfile()`在两个套接字之间直接传送数据。
 
+
+
+
 ##### `setsockopt()`和 `getsockopt()`（分别用于设定和获取套接字选项）
 ```
 int setsockopt(int socket, int level, int option_name, const void *option_value, socklen_t option_len);
